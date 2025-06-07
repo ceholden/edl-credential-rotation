@@ -1,58 +1,90 @@
 # edl-credential-rotation
-AWS stack to update another Lambda's environment settings with new Cumulus Distribution API [temporary S3 credentials](https://nasa.github.io/cumulus-distribution-api/#temporary-s3-credentials) every 30 minutes.
 
+AWS CDK Construct to update a SecretsManager secret with new Cumulus Distribution API
+[temporary S3 credentials](https://nasa.github.io/cumulus-distribution-api/#temporary-s3-credentials) every 30 minutes.
 
-## Requirements
-- Python>=3.8
+## Usage
+
+Refactoring the S3 credential acquisition and refresh process into a dedicated service and persisting
+the retrieved credentials into SecretsManager allows APIs, pipelines, or other processes to access DAAC S3 resources
+without overwhelming the DAAC credentials resource.
+
+This repository contains an example CDK application using this construct inside of `cdk/app.py`.
+
+The system deployed by this construct looks like,
+
+```mermaid
+sequenceDiagram
+    box Grey EDL Credential Rotator
+    participant EDL
+    participant CredRot
+    participant SSM
+    end
+
+    box Blue User Application
+    participant App
+    participant Bucket as DAAC Bucket
+    end
+
+    loop Every 30 Minutes
+        CredRot->>EDL: Request S3 credentials
+        EDL->>CredRot: Return credentials
+        CredRot->>SSM: Store credentials
+    end
+
+    App->>SSM: Request credentials
+    SSM->>App: Return credentials
+    App->>Bucket: Fetch data using direct S3 access
+```
+
+Once the S3 credentials are stored in SecretsManager they may be retrieved in a number of different ways. AWS
+provides documentation on secret retrieval in their documentation,
+https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html
+
+For example,
+
+- AWS Lambda functions should retrieve the secret as part of function ["static initialization"](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html#static-initialization).
+  This ensures that the secret is only retrieved once rather than for each invocation.
+  - AWS also provides a ["SecretsManager extension" layer](https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html) to fetch and cache secrets
+- For short running AWS Batch jobs you can configure the "secrets" as part of the JobDefinition. AWS Batch will manage fetching the secret and injecting it into the container as an environment variable.
+- Long lived user applications might have a singleton that fetches the secret, caches it, and manages re-fetching the secret before it expires.
+
+## Development
+
+### Requirements
+
+- Python>=3.9
 - Docker
-- tox
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - aws-cli
 - An IAM role with sufficient permissions for creating, destroying and modifying the relevant stack resources.
 
-## Environment Settings
+To begin, install developer and application dependencies using `uv`,
+
 ```
-$ export STACKNAME=<Name of your stack>
-$ export PROJECT=<The project name for resource cost tracking>
-$ export LAMBDA=<The Arn of the Lambda that will receive new S3 Credentials>
-$ export USERNAME=<A valid Earth Data Login user name>
-$ export PASSWORD=<A valid Earth Data Login password>
+$ uv sync --all-groups
 ```
 
-## CDK Commands
-### Synth
-Display generated cloud formation template that will be used to deploy.
-```
-$ tox -e dev -r -- synth
-```
-
-### Diff
-Display a diff of the current deployment and any changes created.
-```
-$ tox -e dev -r -- diff || true
-```
-
-### Deploy
-Deploy current version of stack.
-```
-$ tox -e dev -r -- deploy
-```
-
-## Development
-For active stack development run
-```
-$ tox -e dev -r -- version
-```
-This creates a local virtualenv in the directory `devenv`.  To use it for development
-```
-$ source devenv/bin/activate
-```
 Then run the following to install the project's pre-commit hooks
+
 ```
 $ pre-commit install
 ```
 
-## Tests
-To run unit test for all included Lambda functions
+## Linting, formatting, and type checks
+
+This project uses `ruff` for lint/formatting and `mypy` for type checks,
+
 ```
-tox -r
+$ scripts/format
+$ scripts/lint
+$ scripts/typecheck
+```
+
+## Tests
+
+To run unit test for the credential rotation Lambda function,
+
+```
+scripts/test
 ```

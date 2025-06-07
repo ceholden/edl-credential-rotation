@@ -1,31 +1,22 @@
-default_stages: [commit]
+default_stages: [pre-commit]
 repos:
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    - id: trailing-whitespace
+    - id: end-of-file-fixer
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
   - repo: local
     hooks:
-      - id: trailing-whitespace-fixer
-        name: trailing-whitespace-fixer
-        entry: trailing-whitespace-fixer
-        language: system
-
-      - id: end-of-file-fixer
-        name: end-of-file-fixer
-        entry: end-of-file-fixer
-        language: system
-
-      - id: isort
-        name: isort
-        language: system
-        entry: isort
-        types: [python]
-
-      - id: black
-        name: black
-        language: system
-        entry: black
-        types: [python]
-
-      - id: flake8
-        name: flake8
-        language: system
-        entry: flake8
-        types: [python]
+      - id: ty
+        name: ty check
+        entry: uvx ty check . --ignore unresolved-import
+        language: python

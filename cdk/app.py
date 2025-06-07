@@ -1,80 +1,35 @@
+"""
+Example CDK application using this construct
+"""
+
 import os
+from typing import Any
 
-from aws_cdk import aws_events, aws_events_targets
-from aws_cdk import aws_iam as iam
-from aws_cdk import aws_lambda
-from aws_cdk import aws_logs as logs
-from aws_cdk import core
+from aws_cdk import App, Tags, Stack
+from constructs import Construct
 
-# Required env settings
-STACKNAME = os.environ["STACKNAME"]
-PROJECT = os.environ["PROJECT"]
-LAMBDA = os.environ["LAMBDA"]
-USERNAME = os.environ["USERNAME"]
-PASSWORD = os.environ["PASSWORD"]
+from edl_credential_rotation import EarthdataCredentialRotation
+
+stack_name = os.environ["STACK_NAME"]
 
 
-class Stack(core.Stack):
-    def __init__(self, scope: core.Construct, stack_name: str, **kwargs) -> None:
-        super().__init__(scope, stack_name, **kwargs)
+class EdlCredentialRotatorStack(Stack):
+    """EDL Credentials Rotator CDK stack."""
 
-        self.role = iam.Role(
-            self,
-            "LambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                )
-            ],
-        )
-
-        self.role.add_to_policy(
-            iam.PolicyStatement(
-                resources=[LAMBDA],
-                actions=[
-                    "lambda:GetFunctionConfiguration",
-                    "lambda:UpdateFunctionConfiguration",
-                ],
-            )
-        )
-
-        self.function = aws_lambda.Function(
-            self,
-            f"{stack_name}-update-lambda",
-            runtime=aws_lambda.Runtime.PYTHON_3_8,
-            role=self.role,
-            code=aws_lambda.Code.from_docker_build(
-                path=os.path.abspath("./"),
-                file="Dockerfile",
-                platform="linux/amd64",
-            ),
-            handler="handler.handler",
-            memory_size=5000,
-            timeout=core.Duration.minutes(5),
-            environment={
-                "LAMBDA": LAMBDA,
-                "USERNAME": USERNAME,
-                "PASSWORD": PASSWORD,
-            },
-            log_retention=logs.RetentionDays.ONE_WEEK,
-        )
-
-        self.rule = aws_events.Rule(
-            self,
-            "Rule",
-            schedule=aws_events.Schedule.expression("cron(0/30 * * * ? *)"),
-        )
-        self.rule.add_target(aws_events_targets.LambdaFunction(self.function))
+    def __init__(self, scope: Construct, stack_id: str, **kwargs: Any) -> None:
+        super().__init__(scope, f"{stack_id}App", **kwargs)
+        self.edl_credential_rotator = EarthdataCredentialRotation(self, stack_id)
 
 
-app = core.App()
-Stack(scope=app, stack_name=STACKNAME)
+app = App()
+stack = EdlCredentialRotatorStack(
+    app,
+    stack_name,
+)
 
-for k, v in {
-    "Project": PROJECT,
-    "Stack": STACKNAME,
-}.items():
-    core.Tags.of(app).add(k, v, apply_to_launched_instances=True)
+for k, v in dict(
+    Stack=stack_name,
+).items():
+    Tags.of(app).add(k, v)
 
 app.synth()

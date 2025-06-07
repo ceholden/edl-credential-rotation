@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[project]
+name = "edl-credential-rotation"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "aws-cdk-lib>=2,<3",
+    "constructs>=10.4.2",
+]
+dynamic = ["version"]
+
+[dependency-groups]
+dev = [
+    "aws-lambda-typing>=2.20.0",
+    "boto3>=1.38.36",
+    "moto>=5.1.5",
+    "pytest>=8.4.0",
+    "pytest-cov>=6.2.1",
+    "responses>=0.25.7",
+    "ruff>=0.11.13",
+    "ty>=0.0.1a10",
+    "types-requests>=2.31.0.6",
+]
+lambda = [
+    "requests>=2,<3",
+]
+
+[tool.uv]
+package = true
