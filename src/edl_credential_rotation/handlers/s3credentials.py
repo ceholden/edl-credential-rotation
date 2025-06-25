@@ -28,6 +28,7 @@ class S3Credentials(TypedDict):
     secret_access_key: str
     access_key_id: str
     session_token: str
+    expiration: str
 
 
 def fetch_s3_credentials(
@@ -61,6 +62,7 @@ def fetch_s3_credentials(
         secret_access_key=s3_credentials["secretAccessKey"],
         access_key_id=s3_credentials["accessKeyId"],
         session_token=s3_credentials["sessionToken"],
+        expiration=s3_credentials["expiration"],
     )
 
 
@@ -87,6 +89,7 @@ def edl_s3credential_rotator(
                 "SECRET_ACCESS_KEY": s3_credentials["secret_access_key"],
                 "ACCESS_KEY_ID": s3_credentials["access_key_id"],
                 "SESSION_TOKEN": s3_credentials["session_token"],
+                "EXPIRATION": s3_credentials["expiration"],
             }
         ),
     )

@@ -28,6 +28,7 @@ def test_fetch_s3_credentials_correct_redirect() -> None:
             "secretAccessKey": "foo",
             "accessKeyId": "baz",
             "sessionToken": "buz",
+            "expiration": "2021-01-27 00:50:09+00:00",
         },
     )
 
@@ -60,6 +61,7 @@ def test_fetch_s3_credentials_no_auth_bad_redirect() -> None:
             "secretAccessKey": "foo",
             "accessKeyId": "baz",
             "sessionToken": "buz",
+            "expiration": "2021-01-27 00:50:09+00:00",
         },
     )
 

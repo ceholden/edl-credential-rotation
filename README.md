@@ -32,7 +32,7 @@ sequenceDiagram
         CredRot->>SSM: Store credentials
     end
 
-    App->>SSM: Request credentials
+    App->>SSM: Read secret
     SSM->>App: Return credentials
     App->>Bucket: Fetch data using direct S3 access
 ```

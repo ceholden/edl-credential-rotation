@@ -40,8 +40,9 @@ class EarthdataCredentialRotation(Construct):
         The architecture for the Lambda runtime (default: X86_64)
     runtime
         The Python runtime for the refresh Lambda (default: Python 3.12)
-    schedule_rotation
-        Whether to schedule the rotation of the credential (default: True)
+    rotation_frequency_minutes
+        Frequency for rotation schedule in minutes. If None, do not schedule the
+        credentials rotation. (default: 30 minutes)
     """
 
     def __init__(
@@ -51,7 +52,7 @@ class EarthdataCredentialRotation(Construct):
         daac_s3credentials_url: str = LPDAAC_S3CREDENTIALS_URL,
         architecture: Architecture = Architecture.X86_64,
         runtime: Runtime = Runtime.PYTHON_3_12,
-        schedule_rotation: bool = True,
+        rotation_frequency_minutes: int | None = 30,
     ) -> None:
         super().__init__(scope, id)
 
@@ -102,15 +103,15 @@ class EarthdataCredentialRotation(Construct):
         self.edl_user_account_credentials.grant_read(self.s3_credentials_rotator)
         self.edl_s3_credentials.grant_write(self.s3_credentials_rotator)
 
-        self.edl_credential_rotator_schedule = aws_events.Rule(
-            self,
-            "EdlCredentialRotatorSchedule",
-            schedule=aws_events.Schedule.rate(
-                Duration.minutes(30),
-            ),
-        )
+        if rotation_frequency_minutes:
+            self.edl_credential_rotator_schedule = aws_events.Rule(
+                self,
+                "EdlCredentialRotatorSchedule",
+                schedule=aws_events.Schedule.rate(
+                    Duration.minutes(rotation_frequency_minutes),
+                ),
+            )
 
-        if schedule_rotation:
             self.edl_credential_rotator_schedule.add_target(
                 aws_events_targets.LambdaFunction(
                     handler=self._s3_credentials_rotator,
