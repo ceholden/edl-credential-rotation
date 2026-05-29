@@ -18,5 +18,5 @@ repos:
     hooks:
       - id: ty
         name: ty check
-        entry: uvx ty check . --ignore unresolved-import
+        entry: scripts/typecheck
         language: python

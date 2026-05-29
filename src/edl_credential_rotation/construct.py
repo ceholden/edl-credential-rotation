@@ -114,6 +114,6 @@ class EarthdataCredentialRotation(Construct):
 
             self.edl_credential_rotator_schedule.add_target(
                 aws_events_targets.LambdaFunction(
-                    handler=self._s3_credentials_rotator,
+                    handler=self.s3_credentials_rotator,
                 )
             )
