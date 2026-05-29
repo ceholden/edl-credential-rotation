@@ -1,3 +1,3 @@
-from .construct import EarthdataCredentialRotation
+from .construct import EarthdataCredentialCache
 
-__all__ = ["EarthdataCredentialRotation"]
+__all__ = ["EarthdataCredentialCache"]

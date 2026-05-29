@@ -1,21 +1,69 @@
 # edl-credential-rotation
 
-AWS CDK Construct to update a SecretsManager secret with new Cumulus Distribution API
-[temporary S3 credentials](https://nasa.github.io/cumulus-distribution-api/#temporary-s3-credentials) every 30 minutes.
+AWS CDK tooling for automatically refreshing Earthdata Login temporary S3 credentials
+([DAAC /s3credentials](https://nasa.github.io/cumulus-distribution-api/#temporary-s3-credentials)).
+
+Two approaches are provided:
+
+1. **Standalone CDK app** (`cdk/app.py`) — deploys a scheduler that writes fresh credentials
+   directly into a target Lambda's environment variables.
+2. **`EarthdataCredentialCache` construct** — a reusable CDK construct that caches credentials
+   in SecretsManager so multiple services can share them without each independently calling
+   the DAAC credentials endpoint.
 
 ## Usage
 
-Refactoring the S3 credential acquisition and refresh process into a dedicated service and persisting
-the retrieved credentials into SecretsManager allows APIs, pipelines, or other processes to access DAAC S3 resources
-without overwhelming the DAAC credentials resource.
+### Standalone CDK app
 
-See `examples/app.py` for an example CDK application using the `EarthdataCredentialCache` construct.
+The standalone app (`cdk/app.py`) is a self-contained deployment that rotates credentials into
+a target Lambda's environment variables every 30 minutes.
 
-The system deployed by this construct looks like,
+#### Environment settings
+
+```
+$ export STACKNAME=<Name of your stack>
+$ export PROJECT=<The project name for resource cost tracking>
+$ export LAMBDA=<The ARN of the Lambda that will receive new S3 credentials>
+$ export USERNAME=<A valid Earthdata Login username>
+$ export PASSWORD=<A valid Earthdata Login password>
+```
+
+#### CDK commands
+
+```bash
+# Preview the CloudFormation template
+$ cdk synth
+
+# Show a diff against the current deployment
+$ cdk diff
+
+# Deploy
+$ cdk deploy
+```
+
+### EarthdataCredentialCache construct
+
+The `EarthdataCredentialCache` construct is a reusable CDK construct for inclusion in your
+own CDK application. It addresses the thundering-herd problem that arises when many services
+independently call the DAAC credentials endpoint: instead, a single Lambda refreshes the
+credentials on a schedule and stores them in SecretsManager for any service to read.
+
+See `examples/app.py` for a minimal CDK application using the construct.
+
+```python
+from edl_credential_rotation import EarthdataCredentialCache
+
+class MyStack(Stack):
+    def __init__(self, scope, id, **kwargs):
+        super().__init__(scope, id, **kwargs)
+        self.edl_cache = EarthdataCredentialCache(self, "EdlCache")
+```
+
+The system deployed by this construct:
 
 ```mermaid
 sequenceDiagram
-    box Grey EDL Credential Rotator
+    box Grey EDL Credential Cache
     participant EDL
     participant CredRot
     participant SSM
@@ -37,22 +85,20 @@ sequenceDiagram
     App->>Bucket: Fetch data using direct S3 access
 ```
 
-Once the S3 credentials are stored in SecretsManager they may be retrieved in a number of different ways. AWS
-provides documentation on secret retrieval in their documentation,
-https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html
+Once credentials are stored in SecretsManager they can be retrieved in several ways — see the
+[AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html)
+for options. Common patterns:
 
-For example,
-
-- AWS Lambda functions should retrieve the secret as part of function ["static initialization"](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html#static-initialization).
-  This ensures that the secret is only retrieved once rather than for each invocation.
-  - AWS also provides a ["SecretsManager extension" layer](https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html) to fetch and cache secrets
-- For short running AWS Batch jobs you can configure the "secrets" as part of the JobDefinition. AWS Batch will manage fetching the secret and injecting it into the container as an environment variable.
-- Long lived user applications might have a singleton that fetches the secret, caches it, and manages re-fetching the secret before it expires.
+- **Lambda** — retrieve the secret during [static initialization](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html#static-initialization)
+  so it is fetched once per container, not per invocation. AWS also provides a
+  [SecretsManager extension layer](https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html)
+  that handles caching automatically.
+- **AWS Batch** — configure the secret in the JobDefinition; Batch injects it as an environment variable.
+- **Long-lived processes** — use a singleton that fetches, caches, and refreshes the secret before expiry.
 
 ## Development
 
 ### Requirements
-
 
 - Python>=3.9
 - Docker

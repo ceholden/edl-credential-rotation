@@ -20,12 +20,17 @@ DOCKERFILE = HERE / "Dockerfile"
 LPDAAC_S3CREDENTIALS_URL = "https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials"
 
 
-class EarthdataCredentialRotation(Construct):
-    """Automatically rotate credentials for direct S3 access to DAAC buckets.
+class EarthdataCredentialCache(Construct):
+    """Cache DAAC S3 credentials in SecretsManager for shared use.
 
-    Currently this only supports rotatating `/s3credentials` and requires using
-    Earthdata Login username/password. This user/pass credential must be manually
-    populated into the AWS SecretsManager.
+    Periodically fetches fresh temporary S3 credentials from a DAAC
+    /s3credentials endpoint using an Earthdata Login username/password stored in
+    SecretsManager, then writes them back to a separate SecretsManager secret.
+    Multiple services can read from that secret without each independently
+    hitting the DAAC credentials endpoint (avoiding thundering-herd problems).
+
+    The Earthdata Login username/password secret must be manually populated
+    before the rotator Lambda will succeed.
 
     Parameters
     ----------
