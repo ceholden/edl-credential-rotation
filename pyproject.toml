@@ -21,6 +21,7 @@ dev = [
     "aws-lambda-typing>=2.20.0",
     "boto3>=1.38.36",
     "moto>=5.1.5",
+    "pydantic-settings>=2",
     "pytest>=8.4.0",
     "pytest-cov>=6.2.1",
     "responses>=0.25.7",
@@ -35,7 +36,11 @@ lambda = [
 [tool.uv]
 package = true
 
+[tool.ty.environment]
+extra-paths = ["cdk"]
+
 [tool.pytest.ini_options]
-testpaths=[
-    "tests"
+testpaths = [
+    "tests",
+    "lambdas/tests",
 ]

@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 
 import boto3
 import requests
@@ -18,8 +19,8 @@ class SessionWithHeaderRedirection(requests.Session):
         url = prepared_request.url
 
         if "Authorization" in headers:
-            original_parsed = requests.utils.urlparse(response.request.url)
-            redirect_parsed = requests.utils.urlparse(url)
+            original_parsed = urlparse(response.request.url)
+            redirect_parsed = urlparse(url)
 
             if (
                 (original_parsed.hostname != redirect_parsed.hostname)

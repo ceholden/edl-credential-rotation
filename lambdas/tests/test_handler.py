@@ -28,7 +28,7 @@ def test_handler(Session, boto3):
     boto3.client.return_value.get_function_configuration.return_value = {
         "Environment": {"Variables": {"SOMESETTING": "something"}}
     }
-    handler({}, {})
+    handler({}, {})  # type: ignore[arg-type]
     Session.assert_called_once_with(username, password)
     combined_variables = {
         "Variables": {
