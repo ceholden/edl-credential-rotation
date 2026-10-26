@@ -100,7 +100,7 @@ for options. Common patterns:
 
 ### Requirements
 
-- Python>=3.9
+- Python>=3.10
 - Docker
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - aws-cli

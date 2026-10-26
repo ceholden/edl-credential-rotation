@@ -9,7 +9,7 @@ source = "vcs"
 name = "edl-credential-rotation"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "aws-cdk-lib>=2,<3",
     "constructs>=10.4.2",

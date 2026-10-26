@@ -1,4 +1,4 @@
-FROM lambci/lambda:build-python3.9
+FROM lambci/lambda:build-python3.10
 
 WORKDIR /tmp
 
