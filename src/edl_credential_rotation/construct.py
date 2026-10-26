@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from aws_cdk import Duration
-from aws_cdk.aws_secretsmanager import Secret
+from aws_cdk import Duration, Stack
+from aws_cdk.aws_iam import IGrantable
+from aws_cdk.aws_ssm import StringParameter
 from aws_cdk.aws_logs import RetentionDays
 from aws_cdk import aws_events, aws_events_targets
 from aws_cdk.aws_lambda import (
@@ -21,16 +22,25 @@ LPDAAC_S3CREDENTIALS_URL = "https://data.lpdaac.earthdatacloud.nasa.gov/s3creden
 
 
 class EarthdataCredentialCache(Construct):
-    """Cache DAAC S3 credentials in SecretsManager for shared use.
+    """Cache DAAC S3 credentials in SSM Parameter Store for shared use.
 
     Periodically fetches fresh temporary S3 credentials from a DAAC
     /s3credentials endpoint using an Earthdata Login username/password stored in
-    SecretsManager, then writes them back to a separate SecretsManager secret.
-    Multiple services can read from that secret without each independently
-    hitting the DAAC credentials endpoint (avoiding thundering-herd problems).
+    a SecureString SSM parameter, then writes them to a separate SecureString
+    parameter. Multiple services can read from that parameter without each
+    independently hitting the DAAC credentials endpoint (avoiding thundering-herd
+    problems).
 
-    The Earthdata Login username/password secret must be manually populated
-    before the rotator Lambda will succeed.
+    CloudFormation cannot create SecureString parameters, so neither parameter
+    is managed by this construct:
+
+    * The Earthdata Login username/password parameter must be created manually
+      (as a SecureString containing JSON with "USERNAME" and "PASSWORD" keys)
+      before the rotator Lambda will succeed.
+    * The S3 credentials parameter is created by the rotator Lambda on its first
+      run and is not deleted when the stack is destroyed.
+
+    Both parameters are encrypted with the AWS managed `aws/ssm` KMS key.
 
     Parameters
     ----------
@@ -48,6 +58,9 @@ class EarthdataCredentialCache(Construct):
     rotation_frequency_minutes
         Frequency for rotation schedule in minutes. If None, do not schedule the
         credentials rotation. (default: 30 minutes)
+    parameter_prefix
+        Prefix for the SSM parameter names. Must start with "/".
+        (default: "/<stack name>/<construct id>")
     """
 
     def __init__(
@@ -58,6 +71,7 @@ class EarthdataCredentialCache(Construct):
         architecture: Architecture = Architecture.X86_64,
         runtime: Runtime = Runtime.PYTHON_3_12,
         rotation_frequency_minutes: int | None = 30,
+        parameter_prefix: str | None = None,
     ) -> None:
         super().__init__(scope, id)
 
@@ -73,20 +87,33 @@ class EarthdataCredentialCache(Construct):
             },
         )
 
-        # NB: user must populate the values manually
-        self.edl_user_account_credentials = Secret(
-            self,
-            id="EdlUserAccountCredentials",
-            description="Earthdata Login account username and password credentials.",
+        stack = Stack.of(self)
+        if parameter_prefix is None:
+            parameter_prefix = f"/{stack.stack_name}/{id}"
+        elif not parameter_prefix.startswith("/"):
+            raise ValueError(
+                f"parameter_prefix must start with '/', got {parameter_prefix}"
+            )
+        parameter_prefix = parameter_prefix.rstrip("/")
+
+        # NB: user must create and populate this parameter manually
+        self.edl_user_account_credentials = (
+            StringParameter.from_secure_string_parameter_attributes(
+                self,
+                "EdlUserAccountCredentials",
+                parameter_name=f"{parameter_prefix}/edl-user-account-credentials",
+            )
         )
 
-        self.edl_s3_credentials = Secret(
-            self,
-            id="EdlS3Credentials",
-            description="Earthdata credentials permitting direct AWS S3 access.",
+        self.edl_s3_credentials = (
+            StringParameter.from_secure_string_parameter_attributes(
+                self,
+                "EdlS3Credentials",
+                parameter_name=f"{parameter_prefix}/edl-s3-credentials",
+            )
         )
 
-        # This Lambda sets the following keys in the `edl_s3_credentials` Secret,
+        # This Lambda sets the following keys in the `edl_s3_credentials` parameter,
         #   * ACCESS_KEY_ID
         #   * SECRET_ACCESS_KEY
         #   * SESSION_TOKEN
@@ -100,8 +127,10 @@ class EarthdataCredentialCache(Construct):
             timeout=Duration.minutes(1),
             environment={
                 "DAAC_S3CREDENTIALS_URL": daac_s3credentials_url,
-                "USER_PASS_SECRET_ID": self.edl_user_account_credentials.secret_arn,
-                "S3_CREDENTIALS_SECRET_ID": self.edl_s3_credentials.secret_arn,
+                "USER_PASS_PARAMETER_NAME": (
+                    self.edl_user_account_credentials.parameter_name
+                ),
+                "S3_CREDENTIALS_PARAMETER_NAME": self.edl_s3_credentials.parameter_name,
             },
             log_retention=RetentionDays.ONE_WEEK,
         )
@@ -122,3 +151,7 @@ class EarthdataCredentialCache(Construct):
                     handler=self.s3_credentials_rotator,
                 )
             )
+
+    def grant_read(self, grantee: IGrantable) -> None:
+        """Grant permission to read the cached S3 credentials parameter"""
+        self.edl_s3_credentials.grant_read(grantee)

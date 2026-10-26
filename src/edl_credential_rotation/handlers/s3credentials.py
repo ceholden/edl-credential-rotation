@@ -1,7 +1,7 @@
 """Earthdata Login Credential Rotator
 
 This Lambda function is responsible for storing fresh S3 credentials in
-SecretsManager for other pipeline actors to access.
+SSM Parameter Store for other pipeline actors to access.
 """
 
 from __future__ import annotations
@@ -67,24 +67,28 @@ def fetch_s3_credentials(
 
 
 def edl_s3credential_rotator(
-    daac_s3credentials_url: str, user_pass_secret_id: str, s3_credentials_secret_id: str
+    daac_s3credentials_url: str,
+    user_pass_parameter_name: str,
+    s3_credentials_parameter_name: str,
 ) -> None:
     """Fetch user/pass credentials, call EDL to get S3 credentials, and persist"""
-    secrets = boto3.client("secretsmanager")
+    ssm = boto3.client("ssm")
 
     username_password = json.loads(
-        secrets.get_secret_value(
-            SecretId=user_pass_secret_id,
-        )["SecretString"]
+        ssm.get_parameter(
+            Name=user_pass_parameter_name,
+            WithDecryption=True,
+        )["Parameter"]["Value"]
     )
     username = username_password["USERNAME"]
     password = username_password["PASSWORD"]
 
     s3_credentials = fetch_s3_credentials(daac_s3credentials_url, username, password)
 
-    secrets.update_secret(
-        SecretId=s3_credentials_secret_id,
-        SecretString=json.dumps(
+    ssm.put_parameter(
+        Name=s3_credentials_parameter_name,
+        Description="Earthdata credentials permitting direct AWS S3 access.",
+        Value=json.dumps(
             {
                 "SECRET_ACCESS_KEY": s3_credentials["secret_access_key"],
                 "ACCESS_KEY_ID": s3_credentials["access_key_id"],
@@ -92,14 +96,18 @@ def edl_s3credential_rotator(
                 "EXPIRATION": s3_credentials["expiration"],
             }
         ),
+        Type="SecureString",
+        Overwrite=True,
+        # Session tokens can push the value past the 4KB Standard tier limit
+        Tier="Intelligent-Tiering",
     )
 
 
 def handler(event: CloudWatchEventsMessageEvent, context: Context) -> None:
     daac_credentials_url = os.environ["DAAC_S3CREDENTIALS_URL"]
-    user_pass_secret_id = os.environ["USER_PASS_SECRET_ID"]
-    s3_credentials_secret_id = os.environ["S3_CREDENTIALS_SECRET_ID"]
+    user_pass_parameter_name = os.environ["USER_PASS_PARAMETER_NAME"]
+    s3_credentials_parameter_name = os.environ["S3_CREDENTIALS_PARAMETER_NAME"]
 
     edl_s3credential_rotator(
-        daac_credentials_url, user_pass_secret_id, s3_credentials_secret_id
+        daac_credentials_url, user_pass_parameter_name, s3_credentials_parameter_name
     )
